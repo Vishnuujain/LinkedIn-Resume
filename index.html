@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn to Resume Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        button {
+            background-color: #3498db;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <h1>LinkedIn to Resume Converter</h1>
+    <form id="resumeForm">
+        <label for="api_key">OpenAI API Key:</label>
+        <input type="text" id="api_key" name="api_key" required>
+        
+        <label for="pdf_file">Upload LinkedIn PDF:</label>
+        <input type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
+        
+        <button type="submit">Generate Resume</button>
+    </form>
+
+    <script>
+        document.getElementById('resumeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const apiKey = document.getElementById('api_key').value;
+            const pdfFile = document.getElementById('pdf_file').files[0];
+            
+            if (!pdfFile) {
+                alert('Please select a PDF file');
+                return;
+            }
+
+            const pdfText = await extractTextFromPDF(pdfFile);
+            const htmlResume = await generateHTMLResume(apiKey, pdfText);
+            downloadHTMLFile(htmlResume);
+        });
+
+        async function extractTextFromPDF(pdfFile) {
+            const arrayBuffer = await pdfFile.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+            let text = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                text += content.items.map(item => item.str).join(' ') + '\n';
+            }
+            return text;
+        }
+
+        async function generateHTMLResume(apiKey, pdfText) {
+            try {
+                const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+                    model: "gpt-3.5-turbo",
+                    messages: [
+                        {"role": "system", "content": "You are a helpful assistant that converts LinkedIn profile information into an HTML resume."},
+                        {"role": "user", "content": `Convert the following LinkedIn profile information into an HTML resume. Use modern, responsive design with CSS. Make it visually appealing and professional: ${pdfText}`}
+                    ]
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                return response.data.choices[0].message.content;
+            } catch (error) {
+                console.error('Error calling OpenAI API:', error);
+                alert('Error generating resume. Please check your API key and try again.');
+            }
+        }
+
+        function downloadHTMLFile(htmlContent) {
+            const blob = new Blob([htmlContent], {type: 'text/html'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'resume.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
